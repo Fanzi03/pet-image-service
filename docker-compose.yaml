@@ -1,0 +1,24 @@
+networks:
+  shared-network:
+   external: true 
+services: 
+  app: 
+    networks:
+      - shared-network
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    image: pet-image-service:latest
+    container_name: pet_image_consumer
+    ports: 
+      - "8080:8080"
+    environment:
+      - SPRING_KAFKA_CONSUMER_GROUP_ID=${SPRING_KAFKA_CONSUMER_GROUP_ID}
+      - SPRING_KAFKA_BOOTSTRAP_SERVICES=${SPRING_KAFKA_BOOTSTRAP_SERVICES}
+      - JAVA_OPTS=${JAVA_OPTS:-Xmx512m} 
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
