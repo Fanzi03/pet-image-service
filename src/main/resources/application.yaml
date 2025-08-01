@@ -1,0 +1,4 @@
+spring:
+  ai:
+    stabilityai:
+      url: ${IMAGE_AI_URL}

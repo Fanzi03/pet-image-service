@@ -16,9 +16,31 @@ services:
       - SPRING_KAFKA_CONSUMER_GROUP_ID=${SPRING_KAFKA_CONSUMER_GROUP_ID}
       - SPRING_KAFKA_BOOTSTRAP_SERVICES=${SPRING_KAFKA_BOOTSTRAP_SERVICES}
       - JAVA_OPTS=${JAVA_OPTS:-Xmx512m} 
+      - STABITYLIAI_API_KEY=${STABILITYAI_API_KEY} 
+      - IMAGE_AI_URL=${IMAGE_AI_URL}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
       interval: 30s
       timeout: 10s
-      retries: 3
+      retries: 5
     restart: unless-stopped
+    depends_on:
+      - image-ai
+
+  image-ai:
+    build: 
+      context: ./python_image
+      dockerfile: Dockerfile.model
+    networks:
+      - shared-network
+    container_name: image-ai
+    image: sd-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./models:/models
+    environment:
+      - MODEL_PATH=/models/stable-diffusion-v1-5
+      - HF_MODEL_REPO=runwayml/stable-diffusion-v1-5
+volumes:
+  models:
