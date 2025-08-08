@@ -1,12 +1,18 @@
-torch==2.1.0
-torchvision==0.16.0
-transformers==4.35.0
-diffusers==0.24.0
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
-pydantic==2.5.0
-Pillow==10.1.0
-accelerate==0.24.1
-safetensors==0.4.0
-xformers==0.0.22.post7
-numpy==1.24.3
+# Основные библиотеки без строгих версий
+torch
+torchvision
+transformers
+diffusers
+accelerate
+safetensors
+huggingface-hub
+
+# Web фреймворк
+fastapi
+uvicorn[standard]
+pydantic
+
+# Утилиты
+Pillow
+numpy
+aiohttp

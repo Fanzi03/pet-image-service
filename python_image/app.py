@@ -1,138 +1,191 @@
-import asyncio
-import aiohttp
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+import torch
+from diffusers import StableDiffusionPipeline
 import base64
+from io import BytesIO
 import logging
-from pathlib import Path
 from typing import Optional
+import os
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-class StabilityController:
-    def __init__(self, base_url: str = "http://localhost:8000"):
-        self.base_url = base_url
-        self.session: Optional[aiohttp.ClientSession] = None
-    
-    async def __aenter__(self):
-        self.session = aiohttp.ClientSession()
-        return self
-    
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        if self.session:
-            await self.session.close()
-    
-    async def health_check(self) -> bool:
-        """Проверка готовности сервиса"""
-        try:
-            async with self.session.get(f"{self.base_url}/health") as response:
-                if response.status == 200:
-                    data = await response.json()
-                    logger.info(f"Сервис готов: {data}")
-                    return True
-                return False
-        except Exception as e:
-            logger.error(f"Сервис недоступен: {e}")
-            return False
-    
-    async def generate_image(self, prompt: str, width: int = 512, height: int = 512, 
-                           steps: int = 20, guidance: float = 7.5) -> Optional[bytes]:
-        """Генерация изображения"""
-        try:
-            payload = {
-                "prompt": prompt,
-                "width": width,
-                "height": height,
-                "num_inference_steps": steps,
-                "guidance_scale": guidance
-            }
-            
-            logger.info(f"Генерируем: {prompt}")
-            
-            async with self.session.post(f"{self.base_url}/generate", json=payload) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    # Декодируем base64 в байты
-                    image_data = base64.b64decode(data["image"])
-                    logger.info("Изображение получено")
-                    return image_data
-                else:
-                    error_text = await response.text()
-                    logger.error(f"Ошибка генерации: {response.status} - {error_text}")
-                    return None
-                    
-        except Exception as e:
-            logger.error(f"Ошибка при генерации: {e}")
-            return None
-    
-    async def save_image(self, image_data: bytes, filename: str) -> bool:
-        """Сохранение изображения в файл"""
-        try:
-            output_dir = Path("output")
-            output_dir.mkdir(exist_ok=True)
-            
-            filepath = output_dir / filename
-            with open(filepath, 'wb') as f:
-                f.write(image_data)
-            
-            logger.info(f"Изображение сохранено: {filepath}")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Ошибка сохранения: {e}")
-            return False
+app = FastAPI(title="Stable Diffusion API", version="1.0.0")
 
-async def main():
-    """Пример использования контроллера"""
-    
-    # Тестовые промпты
-    prompts = [
-        "beautiful sunset over mountains",
-        "cute cat sitting in a garden",
-        "futuristic city with flying cars"
-    ]
-    
-    async with StabilityController() as controller:
-        # Проверяем готовность сервиса
-        logger.info("Проверяем сервис...")
+# Глобальная переменная для пайплайна
+pipeline: Optional[StableDiffusionPipeline] = None
+
+class GenerateRequest(BaseModel):
+    prompt: str
+    width: int = 512
+    height: int = 512
+    num_inference_steps: int = 20
+    guidance_scale: float = 7.5
+
+@app.on_event("startup")
+async def load_model():
+    """Загружаем модель при старте"""
+    global pipeline
+    try:
+        logger.info("🚀 Загружаем Stable Diffusion модель...")
         
-        # Ждем пока сервис будет готов (макс 2 минуты)
-        for attempt in range(24):  # 24 попытки по 5 секунд = 2 минуты
-            if await controller.health_check():
-                break
-            logger.info(f"Попытка {attempt + 1}/24, ждем...")
-            await asyncio.sleep(5)
+        # Проверяем доступность устройства
+        if torch.cuda.is_available():
+            device = "cuda"
+            torch_dtype = torch.float16
+            logger.info("✅ Используем CUDA")
         else:
-            logger.error("Сервис не готов, завершаем")
-            return
+            device = "cpu"
+            torch_dtype = torch.float32
+            logger.info("⚠️ Используем CPU (будет медленно)")
         
-        logger.info("Сервис готов! Начинаем генерацию...")
+        # Путь к модели из переменной окружения или по умолчанию
+        model_id = os.getenv("HF_MODEL_REPO", "runwayml/stable-diffusion-v1-5")
+        model_path = os.getenv("MODEL_PATH", None)
         
-        # Генерируем изображения
-        for i, prompt in enumerate(prompts, 1):
-            print(f"\n--- Генерация {i}/{len(prompts)} ---")
-            
-            image_data = await controller.generate_image(
-                prompt=prompt,
-                width=512,
-                height=512,
-                steps=20,
-                guidance=7.5
+        logger.info(f"📂 Модель: {model_path if model_path else model_id}")
+        
+        # Загружаем модель
+        if model_path and os.path.exists(model_path):
+            # Если есть локальная модель
+            pipeline = StableDiffusionPipeline.from_pretrained(
+                model_path,
+                torch_dtype=torch_dtype,
+                use_safetensors=True,
+                local_files_only=True
             )
-            
-            if image_data:
-                filename = f"image_{i:02d}_{prompt.replace(' ', '_')[:30]}.png"
-                if await controller.save_image(image_data, filename):
-                    print(f"✅ Готово: {filename}")
-                else:
-                    print(f"❌ Ошибка сохранения: {prompt}")
-            else:
-                print(f"❌ Ошибка генерации: {prompt}")
-            
-            # Небольшая пауза между запросами
-            await asyncio.sleep(1)
+            logger.info("📁 Загружена локальная модель")
+        else:
+            # Загружаем из HuggingFace
+            pipeline = StableDiffusionPipeline.from_pretrained(
+                model_id,
+                torch_dtype=torch_dtype,
+                use_safetensors=True
+            )
+            logger.info("🌐 Загружена модель из HuggingFace")
         
-        print(f"\n🎉 Генерация завершена! Проверьте папку 'output'")
+        # Перемещаем на устройство
+        pipeline = pipeline.to(device)
+        
+        # Оптимизации для экономии памяти
+        if device == "cuda":
+            pipeline.enable_attention_slicing()
+            try:
+                pipeline.enable_xformers_memory_efficient_attention()
+                logger.info("✨ Включена оптимизация xformers")
+            except Exception as e:
+                logger.warning(f"⚠️ xformers недоступен: {e}")
+        else:
+            # Оптимизации для CPU
+            pipeline.enable_attention_slicing()
+        
+        logger.info("🎉 Модель успешно загружена и готова к работе!")
+        
+        # Тестовая генерация для прогрева
+        logger.info("🔥 Прогреваем модель...")
+        with torch.no_grad():
+            _ = pipeline("test", num_inference_steps=1, guidance_scale=1.0, width=64, height=64)
+        logger.info("✅ Модель прогрета!")
+        
+    except Exception as e:
+        logger.error(f"❌ Ошибка загрузки модели: {e}")
+        raise e
+
+@app.get("/health")
+async def health_check():
+    """Проверка готовности сервиса"""
+    if pipeline is None:
+        raise HTTPException(status_code=503, detail="Модель еще загружается")
+    
+    return {
+        "status": "healthy",
+        "model_loaded": True,
+        "device": "cuda" if torch.cuda.is_available() else "cpu",
+        "model": os.getenv("HF_MODEL_REPO", "runwayml/stable-diffusion-v1-5"),
+        "torch_version": torch.__version__
+    }
+
+@app.post("/generate")
+async def generate_image(request: GenerateRequest):
+    """Генерация изображения - основной эндпоинт для Java приложения"""
+    if pipeline is None:
+        raise HTTPException(status_code=503, detail="Модель не загружена")
+    
+    try:
+        logger.info(f"🎨 Генерируем: '{request.prompt}' ({request.width}x{request.height})")
+        
+        # Валидация параметров
+        if request.width > 1024 or request.height > 1024:
+            raise HTTPException(status_code=400, detail="Максимальное разрешение 1024x1024")
+        
+        if request.num_inference_steps > 50:
+            raise HTTPException(status_code=400, detail="Максимум 50 шагов")
+        
+        # Генерируем изображение
+        device = next(pipeline.unet.parameters()).device
+        
+        with torch.autocast(device.type if device.type != "cpu" else "cpu"):
+            result = pipeline(
+                prompt=request.prompt,
+                width=request.width,
+                height=request.height,
+                num_inference_steps=request.num_inference_steps,
+                guidance_scale=request.guidance_scale,
+                generator=torch.Generator(device=device).manual_seed(42)
+            )
+        
+        image = result.images[0]
+        
+        # Конвертируем в base64
+        buffer = BytesIO()
+        image.save(buffer, format="PNG", optimize=True)
+        image_base64 = base64.b64encode(buffer.getvalue()).decode()
+        
+        logger.info(f"✅ Изображение готово! Размер: {len(image_base64)} символов")
+        
+        return {
+            "image": image_base64,
+            "prompt": request.prompt,
+            "width": request.width,
+            "height": request.height,
+            "steps": request.num_inference_steps,
+            "guidance": request.guidance_scale
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Ошибка генерации: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка генерации: {str(e)}")
+
+@app.get("/")
+async def root():
+    """Информация об API"""
+    return {
+        "service": "Stable Diffusion API",
+        "version": "1.0.0",
+        "model": os.getenv("HF_MODEL_REPO", "runwayml/stable-diffusion-v1-5"),
+        "endpoints": {
+            "health": "GET /health - Проверка готовности",
+            "generate": "POST /generate - Генерация изображения",
+            "docs": "GET /docs - Swagger документация"
+        },
+        "status": "ready" if pipeline else "loading"
+    }
+
+@app.get("/status")
+async def get_status():
+    """Детальный статус сервиса"""
+    return {
+        "model_loaded": pipeline is not None,
+        "cuda_available": torch.cuda.is_available(),
+        "device": "cuda" if torch.cuda.is_available() else "cpu",
+        "torch_version": torch.__version__,
+        "model_path": os.getenv("MODEL_PATH", "HuggingFace"),
+        "model_repo": os.getenv("HF_MODEL_REPO", "runwayml/stable-diffusion-v1-5")
+    }
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    import uvicorn
+    logger.info("🚀 Запускаем Stable Diffusion API...")
+    uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")

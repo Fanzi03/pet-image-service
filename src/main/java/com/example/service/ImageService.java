@@ -1,25 +1,35 @@
 package com.example.service;
 
 
-import org.springframework.ai.image.ImagePrompt;
-import org.springframework.ai.image.ImageResponse;
-import org.springframework.ai.stabilityai.StabilityAiImageModel;
+import java.util.Map;
+
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Service;
+import org.springframework.web.reactive.function.client.WebClient;
+
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import lombok.extern.slf4j.Slf4j;
+import reactor.core.publisher.Mono;
 
 @Service
+@Slf4j
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 @RequiredArgsConstructor
 public class ImageService {
-  StabilityAiImageModel imageModel;
-  
-  public ImageResponse generateImage(String prompt){
-    ImageResponse imageResponse = imageModel.call(
-      new ImagePrompt(prompt)
-    );
+	WebClient webClient;
 
-    return imageResponse;
-  }
+	public Mono<String> generateImageAsync(String prompt) {
+		Map<String, Object> body = Map.of("prompt", prompt);
+
+		return webClient.post()
+		.uri("/generate")
+		.bodyValue(body)
+		.retrieve()
+		.bodyToMono(new ParameterizedTypeReference<Map<String, Object>>() {}) 		.			   map(map -> {
+			Object url = map.get("url");
+			return url == null ? null : url.toString();
+		});
+	}
 }

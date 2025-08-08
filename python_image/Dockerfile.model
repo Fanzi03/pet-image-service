@@ -1,14 +1,39 @@
 FROM python:3.10-slim
 
-RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
-
 WORKDIR /app
 
-RUN git clone https://github.com/comfyanonymous/ComfyUI.git .
+# Установка системных зависимостей
+RUN apt-get update && apt-get install -y \
+    curl \
+    git \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
 
-RUN pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
-RUN pip install -r requirements.txt
+# Обновляем pip
+RUN pip install --upgrade pip
 
-EXPOSE 8188
+# Копируем код
+COPY app.py .
 
-CMD ["python", "main.py", "--listen", "0.0.0.0", "--port", "8188"]
+# Устанавливаем зависимости без requirements.txt
+RUN pip install --no-cache-dir \
+    torch \
+    torchvision \
+    transformers \
+    diffusers \
+    accelerate \
+    safetensors \
+    huggingface-hub \
+    fastapi \
+    "uvicorn[standard]" \
+    pydantic \
+    Pillow \
+    numpy \
+    aiohttp
+
+# Создаем директории
+RUN mkdir -p /models /output
+
+EXPOSE 8000
+
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]

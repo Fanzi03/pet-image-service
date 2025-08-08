@@ -28,23 +28,21 @@ repositories {
 	mavenCentral()
 }
 
-dependencyManagement {
-    imports {
-        mavenBom("org.springframework.ai:spring-ai-bom:1.0.0")
-    }
-}
+//dependencyManagement {
+//   imports {
+//       mavenBom("org.springframework.ai:spring-ai-bom:1.0.0")
+//   }
+//}
 
 dependencies {
   // Spring
 	implementation("org.springframework.boot:spring-boot-starter-web")
+	implementation("org.springframework.boot:spring-boot-starter-webflux:3.5.3")
 	implementation("org.springframework.kafka:spring-kafka")
 	compileOnly("org.projectlombok:lombok")
 	developmentOnly("org.springframework.boot:spring-boot-devtools")
 	annotationProcessor("org.projectlombok:lombok")
-	implementation("org.springframework.ai:spring-ai-stability-ai-spring-boot-starter:1.0.0-M6")
-	implementation("org.springframework.ai:spring-ai-stability-ai:1.0.0")
-	implementation ("org.springframework.ai:spring-ai-starter-model-stability-ai")
-	// implementation ("org.springframework.ai:spring-ai-starter-model-openai")
+//	implementation("org.springframework.ai:spring-ai-model:1.0.0")
 
 	//test
 	testImplementation("org.springframework.boot:spring-boot-starter-test")

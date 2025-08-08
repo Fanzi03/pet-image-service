@@ -25,22 +25,13 @@ services:
       retries: 5
     restart: unless-stopped
     depends_on:
-      - image-ai
+      - local-image
 
-  image-ai:
+  local-image:
     build: 
       context: ./python_image
       dockerfile: Dockerfile.model
     networks:
       - shared-network
-    container_name: image-ai
-    image: sd-backend
     ports:
       - "8000:8000"
-    volumes:
-      - ./models:/models
-    environment:
-      - MODEL_PATH=/models/stable-diffusion-v1-5
-      - HF_MODEL_REPO=runwayml/stable-diffusion-v1-5
-volumes:
-  models:

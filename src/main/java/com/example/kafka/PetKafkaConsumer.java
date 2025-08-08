@@ -1,6 +1,5 @@
 package com.example.kafka;
 
-import org.springframework.ai.image.ImageResponse;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Service;
 
@@ -23,11 +22,7 @@ public class PetKafkaConsumer {
 
     @KafkaListener(topics = "pets", groupId = "image-group", containerFactory = "kafkaListenerContainerFactory")
     public void consumePet(Pet pet){
-      String prompt = petImageService.petToPromt(pet); 
-
-      ImageResponse imageResponse = imageService.generateImage(prompt);
-      String imageUrl = imageResponse.getResult().getOutput().getUrl(); 
-      petImageKafkaProducer.sendPetImageToKafka(imageUrl);
-    
+      	String prompt = petImageService.petToPromt(pet); 
+//	petImageKafkaProducer.sendPetImageToKafka(imageService.generateImageAsync(prompt));
     }
 }
