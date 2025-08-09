@@ -16,7 +16,6 @@ services:
       - SPRING_KAFKA_CONSUMER_GROUP_ID=${SPRING_KAFKA_CONSUMER_GROUP_ID}
       - SPRING_KAFKA_BOOTSTRAP_SERVICES=${SPRING_KAFKA_BOOTSTRAP_SERVICES}
       - JAVA_OPTS=${JAVA_OPTS:-Xmx512m} 
-      - STABITYLIAI_API_KEY=${STABILITYAI_API_KEY} 
       - IMAGE_AI_URL=${IMAGE_AI_URL}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
@@ -31,6 +30,7 @@ services:
     build: 
       context: ./python_image
       dockerfile: Dockerfile.model
+    container_name: local-image
     networks:
       - shared-network
     ports:

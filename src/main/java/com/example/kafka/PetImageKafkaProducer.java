@@ -12,8 +12,8 @@ import lombok.experimental.FieldDefaults;
 public class PetImageKafkaProducer {
    KafkaTemplate<String, String> imageKafkaTemplate;
   
-   public void sendPetImageToKafka(String imageUrl){
-    String key = "imageUrl-" + imageUrl;
+   public void sendPetImageToKafka(Long petId, String imageUrl){
+    String key = "pet-" + petId;
     imageKafkaTemplate.send(
       "urls", key, imageUrl
     );

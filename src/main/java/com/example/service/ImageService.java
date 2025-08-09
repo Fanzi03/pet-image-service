@@ -32,4 +32,20 @@ public class ImageService {
 			return url == null ? null : url.toString();
 		});
 	}
+
+	public String generateImage(String prompt){
+		try{
+			Map<String,Object> body = Map.of("prompt",prompt);
+			Map<String,Object> resp = webClient.post()
+			.uri("/generate")
+			.bodyValue(body)
+			.retrieve()
+			.bodyToMono(new ParameterizedTypeReference<Map<String,Object>>() {})
+			.block();
+			return resp ==null ? null : String.valueOf(resp.get("url"));
+		}catch(Exception e){
+			log.error("mistake with generate: {}", e.getMessage());
+			throw new RuntimeException(e);
+		}
+	}
 }
